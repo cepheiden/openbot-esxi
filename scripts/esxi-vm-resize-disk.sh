@@ -16,11 +16,11 @@ VM_NAME="${1:?Usage: $0 <vm-name> <new-size-gb>}"
 NEW_SIZE="${2:?Usage: $0 <vm-name> <new-size-gb>}G"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-ESXI_HOST="192.168.111.172"
+ESXI_HOST="${ESXI_HOST:-192.168.1.100}"
 ESXI_PASS=$(python3 -c "
 import sys; sys.path.insert(0,'$SCRIPTS_DIR')
 from vw_ref import resolve
-print(resolve('vw://YOUR-ESXI-ENTRY/password'))
+print(resolve('vw://ESXi-Server/password'))
 ")
 export GOVC_URL="https://root:${ESXI_PASS}@${ESXI_HOST}"
 export GOVC_INSECURE=true

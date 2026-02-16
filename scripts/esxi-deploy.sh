@@ -6,11 +6,11 @@
 set -euo pipefail
 
 # --- Config ---
-ESXI_HOST="192.168.111.172"
+ESXI_HOST="${ESXI_HOST:-192.168.1.100}"
 ESXI_USER="root"
 ESXI_DATASTORE="datastore1"
 NETWORK="VM Network"
-DOMAIN="zahome.local"
+DOMAIN="${DOMAIN:-local}"
 DEFAULT_CPU=2
 DEFAULT_RAM=2048
 DEFAULT_DISK=20
@@ -28,7 +28,7 @@ SERIAL_PORT="${5:-$(python3 -c "import random; print(random.randint(8600,8699))"
 ESXI_PASS=$(python3 -c "
 import sys; sys.path.insert(0,'$SCRIPTS_DIR')
 from vw_ref import resolve
-print(resolve('vw://YOUR-ESXI-ENTRY/password'))
+print(resolve('vw://ESXi-Server/password'))
 ")
 
 # --- Generate random password ---
@@ -44,7 +44,7 @@ echo "  ESXi Debian 13 Deploy"
 echo "============================================"
 echo "  VM:       $HOSTNAME"
 echo "  Specs:    ${CPU}C / ${RAM}MB / ${DISK}GB"
-echo "  User:     zy / root"
+echo "  User:     user / root"
 echo "  Password: $VM_PASS"
 echo "  Serial:   telnet $ESXI_HOST $SERIAL_PORT"
 echo "============================================"
@@ -100,8 +100,8 @@ d-i passwd/root-password-again password $VM_PASS
 
 ### User account
 d-i passwd/make-user boolean true
-d-i passwd/user-fullname string Zeynel
-d-i passwd/username string zy
+d-i passwd/user-fullname string User
+d-i passwd/username string user
 d-i passwd/user-password password $VM_PASS
 d-i passwd/user-password-again password $VM_PASS
 
@@ -124,11 +124,11 @@ d-i grub-installer/bootdev string default
 d-i finish-install/reboot_in_progress note
 d-i debian-installer/exit/poweroff boolean false
 
-### Late command — enable SSH, add zy to sudo, configure network
+### Late command — enable SSH, add user to sudo, configure network
 d-i preseed/late_command string \
   in-target sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config; \
   in-target sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config; \
-  in-target usermod -aG sudo zy; \
+  in-target usermod -aG sudo user; \
   in-target bash -c 'echo -e "auto ens192\\niface ens192 inet dhcp" > /etc/network/interfaces.d/vmxnet3'; \
   in-target bash -c 'echo "blacklist floppy" > /etc/modprobe.d/blacklist-floppy.conf'; \
   in-target bash -c 'echo "blacklist pcspkr" >> /etc/modprobe.d/blacklist-floppy.conf'; \
@@ -345,7 +345,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             echo "============================================"
             echo "  IP:       $VM_IP"
             echo "  SSH:      ssh root@${VM_IP}"
-            echo "  User:     zy / $VM_PASS"
+            echo "  User:     user / $VM_PASS"
             echo "  Root:     root / $VM_PASS"
             echo "============================================"
             
@@ -400,7 +400,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             echo "  Network:  vmxnet3"
             echo "  Serial:   telnet $ESXI_HOST $SERIAL_PORT"
             echo "  SSH:      ssh root@${NEW_IP:-$VM_IP}"
-            echo "  User:     zy / $VM_PASS"
+            echo "  User:     user / $VM_PASS"
             echo "  Root:     root / $VM_PASS"
             echo "============================================"
             exit 0

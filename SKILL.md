@@ -42,7 +42,7 @@ bash scripts/esxi-deploy.sh webserver 4 4096 50 8610
 
 ## What It Does
 
-1. **Generate preseed.cfg** — German locale, DHCP, user `zy` + `root`, random password
+1. **Generate preseed.cfg** — German locale, DHCP, configurable user + `root`, random password
 2. **Build custom ISO** — Debian netinst + preseed, patched isolinux for auto-boot
 3. **Upload ISO** to ESXi datastore
 4. **Create VM** — NVMe disk (thin provisioned), dual NIC (E1000 for installer + vmxnet3 for production), serial port via telnet
@@ -88,11 +88,11 @@ Requires `cloud-guest-utils` on the VM (pre-installed by the deploy script).
 Edit variables at the top of `scripts/esxi-deploy.sh`:
 
 ```bash
-ESXI_HOST="192.168.111.172"    # ESXi host IP
+ESXI_HOST="192.168.1.100"    # ESXi host IP
 ESXI_USER="root"               # ESXi user
 ESXI_DATASTORE="datastore1"    # Target datastore
 NETWORK="VM Network"           # Port group name
-DOMAIN="zahome.local"          # Domain for VMs
+DOMAIN="local"          # Domain for VMs
 ```
 
 Credentials are resolved via Vaultwarden (`scripts/vw_ref.py`). Adapt the `ESXI_PASS` resolution to your credential store, or hardcode for testing.
