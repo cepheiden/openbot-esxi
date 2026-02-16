@@ -5,16 +5,16 @@
 # =============================================================================
 set -euo pipefail
 
-# --- Config ---
-ESXI_HOST="${ESXI_HOST:-192.168.1.100}"
-ESXI_USER="root"
-ESXI_DATASTORE="datastore1"
-NETWORK="VM Network"
+# --- Config (override via environment variables) ---
+ESXI_HOST="${ESXI_HOST:?Set ESXI_HOST to your ESXi IP}"
+ESXI_USER="${ESXI_USER:-root}"
+ESXI_DATASTORE="${ESXI_DATASTORE:-datastore1}"
+NETWORK="${NETWORK:-VM Network}"
 DOMAIN="${DOMAIN:-local}"
 DEFAULT_CPU=2
 DEFAULT_RAM=2048
 DEFAULT_DISK=20
-ISO_CACHE_DIR="/root/.openclaw/workspace/.cache/esxi-deploy"
+ISO_CACHE_DIR="${ISO_CACHE_DIR:-/tmp/esxi-deploy-cache}"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Parameters ---
@@ -24,19 +24,18 @@ RAM="${3:-$DEFAULT_RAM}"
 DISK="${4:-$DEFAULT_DISK}"
 SERIAL_PORT="${5:-$(python3 -c "import random; print(random.randint(8600,8699))")}"
 
-# --- Resolve ESXi password from Vaultwarden ---
-ESXI_PASS=$(python3 -c "
-import sys; sys.path.insert(0,'$SCRIPTS_DIR')
-from vw_ref import resolve
-print(resolve('vw://ESXi-Server/password'))
-")
+# --- ESXi password (from environment) ---
+ESXI_PASS="${ESXI_PASS:?Set ESXI_PASS to your ESXi root password}"
 
 # --- Generate random password ---
 VM_PASS=$(python3 -c "import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(12)))")
 
 # --- Setup ---
 mkdir -p "$ISO_CACHE_DIR"
-export GOVC_URL="https://${ESXI_USER}:${ESXI_PASS}@${ESXI_HOST}"
+# govc auth via separate env vars (avoids password in process args)
+export GOVC_URL="https://${ESXI_HOST}"
+export GOVC_USERNAME="${ESXI_USER}"
+export GOVC_PASSWORD="${ESXI_PASS}"
 export GOVC_INSECURE=true
 
 echo "============================================"
@@ -209,7 +208,7 @@ echo "[5/7] Creating VM on ESXi..."
 govc vm.destroy "$HOSTNAME" 2>/dev/null || true
 
 # Create via VMX for NVMe controller support
-sshpass -p "$ESXI_PASS" ssh -o StrictHostKeyChecking=no ${ESXI_USER}@${ESXI_HOST} "
+SSHPASS="$ESXI_PASS" sshpass -e ssh -o StrictHostKeyChecking=no ${ESXI_USER}@${ESXI_HOST} "
     VM_DIR=\"/vmfs/volumes/${ESXI_DATASTORE}/${HOSTNAME}\"
     rm -rf \"\$VM_DIR\"
     mkdir -p \"\$VM_DIR\"
@@ -295,7 +294,7 @@ VMX
 echo "[6/7] Powering on VM..."
 
 # Ensure ESXi firewall allows serial port access
-sshpass -p "$ESXI_PASS" ssh -o StrictHostKeyChecking=no "${ESXI_USER}@${ESXI_HOST}" \
+SSHPASS="$ESXI_PASS" sshpass -e ssh -o StrictHostKeyChecking=no "${ESXI_USER}@${ESXI_HOST}" \
     "esxcli network firewall ruleset set -e true -r remoteSerialPort" 2>/dev/null || true
 
 govc vm.power -on "$HOSTNAME"
@@ -337,7 +336,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     
     if [ -n "$VM_IP" ] && [[ "$VM_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # Try SSH
-        if sshpass -p "$VM_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${VM_IP}" "hostname" >/dev/null 2>&1; then
+        if SSHPASS="$VM_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${VM_IP}" "hostname" >/dev/null 2>&1; then
             kill $SERIAL_PID 2>/dev/null; rm -f "$SERIAL_LOG"
             echo ""
             echo "============================================"
@@ -354,7 +353,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             echo "  Removing E1000 adapter (vmxnet3 already active)..."
             
             # Shut down gracefully
-            sshpass -p "$VM_PASS" ssh -o StrictHostKeyChecking=no "root@${VM_IP}" "shutdown -h now" 2>/dev/null || true
+            SSHPASS="$VM_PASS" sshpass -e ssh -o StrictHostKeyChecking=no "root@${VM_IP}" "shutdown -h now" 2>/dev/null || true
             sleep 10
             
             # Wait for power off
@@ -369,7 +368,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             
             # Remove CD-ROM ISO, set boot to disk
             govc device.cdrom.eject -vm "$HOSTNAME" -device cdrom-16000 2>/dev/null || true
-            sshpass -p "$ESXI_PASS" ssh -o StrictHostKeyChecking=no "${ESXI_USER}@${ESXI_HOST}" "
+            SSHPASS="$ESXI_PASS" sshpass -e ssh -o StrictHostKeyChecking=no "${ESXI_USER}@${ESXI_HOST}" "
                 VMX=\"/vmfs/volumes/${ESXI_DATASTORE}/${HOSTNAME}/${HOSTNAME}.vmx\"
                 sed -i 's|bios.bootOrder = \"cdrom,hdd\"|bios.bootOrder = \"hdd\"|' \"\$VMX\"
             " 2>/dev/null || true
@@ -383,7 +382,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             for i in $(seq 1 24); do
                 NEW_IP=$(govc vm.ip -wait 5s "$HOSTNAME" 2>/dev/null)
                 if [ -n "$NEW_IP" ] && [ "$NEW_IP" != "" ]; then
-                    if sshpass -p "$VM_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${NEW_IP}" "hostname" >/dev/null 2>&1; then
+                    if SSHPASS="$VM_PASS" sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "root@${NEW_IP}" "hostname" >/dev/null 2>&1; then
                         break
                     fi
                 fi

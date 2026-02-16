@@ -16,13 +16,11 @@ VM_NAME="${1:?Usage: $0 <vm-name> <new-size-gb>}"
 NEW_SIZE="${2:?Usage: $0 <vm-name> <new-size-gb>}G"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-ESXI_HOST="${ESXI_HOST:-192.168.1.100}"
-ESXI_PASS=$(python3 -c "
-import sys; sys.path.insert(0,'$SCRIPTS_DIR')
-from vw_ref import resolve
-print(resolve('vw://ESXi-Server/password'))
-")
-export GOVC_URL="https://root:${ESXI_PASS}@${ESXI_HOST}"
+ESXI_HOST="${ESXI_HOST:?Set ESXI_HOST to your ESXi IP}"
+ESXI_PASS="${ESXI_PASS:?Set ESXI_PASS to your ESXi root password}"
+export GOVC_URL="https://${ESXI_HOST}"
+export GOVC_USERNAME="${ESXI_USER:-root}"
+export GOVC_PASSWORD="${ESXI_PASS}"
 export GOVC_INSECURE=true
 
 # Get VM IP and disk name
@@ -34,12 +32,8 @@ if [ -z "$VM_IP" ] || [ -z "$DISK_NAME" ]; then
     exit 1
 fi
 
-# Get VM password from Vaultwarden
-VM_PASS=$(python3 -c "
-import sys; sys.path.insert(0,'$SCRIPTS_DIR')
-from vw_ref import resolve
-print(resolve('vw://ESXi VM $VM_NAME/password'))
-")
+# VM password (from environment)
+VM_PASS="${VM_PASS:?Set VM_PASS to the VM root password}"
 
 echo "============================================"
 echo "  Disk Resize: $VM_NAME"
@@ -54,7 +48,7 @@ govc vm.disk.change -vm "$VM_NAME" -disk.name "$DISK_NAME" -size "$NEW_SIZE"
 
 # Step 2: Rescan disk in guest
 echo "[2/3] Rescanning disk in guest..."
-sshpass -p "$VM_PASS" ssh -o StrictHostKeyChecking=no "root@$VM_IP" bash -s <<'REMOTE'
+SSHPASS="$VM_PASS" sshpass -e ssh -o StrictHostKeyChecking=no "root@$VM_IP" bash -s <<'REMOTE'
 set -e
 
 # Find the root disk device
@@ -92,7 +86,7 @@ REMOTE
 
 # Step 3: Verify
 echo "[3/3] Verifying..."
-sshpass -p "$VM_PASS" ssh -o StrictHostKeyChecking=no "root@$VM_IP" "df -h / | tail -1"
+SSHPASS="$VM_PASS" sshpass -e ssh -o StrictHostKeyChecking=no "root@$VM_IP" "df -h / | tail -1"
 
 echo "============================================"
 echo "  ✅ Resize complete!"

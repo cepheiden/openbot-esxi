@@ -23,7 +23,12 @@ apt install xorriso isolinux sshpass
 
 ## Usage
 
+All credentials are passed via environment variables — nothing is hardcoded or embedded in process arguments.
+
 ```bash
+export ESXI_HOST="192.168.1.100"
+export ESXI_PASS="your-esxi-root-password"
+
 bash scripts/esxi-deploy.sh [hostname] [cpu] [ram_mb] [disk_gb] [serial_port]
 ```
 
@@ -78,6 +83,10 @@ serial0.fileName = "telnet://<ESXI_IP>:<port>"
 Grow a VM's disk without shutdown:
 
 ```bash
+export ESXI_HOST="192.168.1.100"
+export ESXI_PASS="your-esxi-password"
+export VM_PASS="vm-root-password"
+
 bash scripts/esxi-vm-resize-disk.sh <vm-name> <new-size-gb>
 ```
 
@@ -85,17 +94,18 @@ Requires `cloud-guest-utils` on the VM (pre-installed by the deploy script).
 
 ## Configuration
 
-Edit variables at the top of `scripts/esxi-deploy.sh`:
+All settings are configurable via environment variables:
 
 ```bash
-ESXI_HOST="192.168.1.100"    # ESXi host IP
-ESXI_USER="root"               # ESXi user
-ESXI_DATASTORE="datastore1"    # Target datastore
-NETWORK="VM Network"           # Port group name
-DOMAIN="local"          # Domain for VMs
+export ESXI_HOST="192.168.1.100"    # ESXi host IP (required)
+export ESXI_PASS="secret"           # ESXi root password (required)
+export ESXI_USER="root"             # ESXi user (default: root)
+export ESXI_DATASTORE="datastore1"  # Target datastore (default: datastore1)
+export NETWORK="VM Network"         # Port group name (default: VM Network)
+export DOMAIN="example.local"       # Domain for VMs (default: local)
 ```
 
-Credentials are resolved via Vaultwarden (`scripts/vw_ref.py`). Adapt the `ESXI_PASS` resolution to your credential store, or hardcode for testing.
+No credential store or external resolver is required. Pass secrets via environment variables only — they are never embedded in process arguments or URLs.
 
 ## VM Configuration Details
 
@@ -116,6 +126,17 @@ Credentials are resolved via Vaultwarden (`scripts/vw_ref.py`). Adapt the `ESXI_
 - Blacklisted modules: `floppy`, `pcspkr` (prevent I/O error loops in VMs)
 
 Customize the preseed section in `esxi-deploy.sh` for different locales or packages.
+
+## Security Considerations
+
+- **Credentials**: All secrets are passed via environment variables, never embedded in URLs or process arguments. `govc` uses `GOVC_USERNAME`/`GOVC_PASSWORD` env vars.
+- **SSH access**: The script uses `sshpass` for automated SSH. For production, consider SSH key-based auth instead.
+- **Serial console**: Telnet is unencrypted. The serial port is bound to the ESXi host IP (not `0.0.0.0`), but anyone with network access to the ESXi host can connect. Restrict access via:
+  - ESXi firewall rules (limit `remoteSerialPort` to trusted IPs)
+  - Network segmentation / VPN
+  - Disable serial port after debugging
+- **Generated passwords**: VM passwords are output to stdout. Redirect output or use a credential store in production.
+- **Lab use recommended**: Test on a lab ESXi host before using in production. Review all scripts before running.
 
 ## Gotchas
 
