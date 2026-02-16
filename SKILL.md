@@ -7,6 +7,20 @@ description: Zero-touch Debian 13 VM deployment on VMware ESXi 8. Builds custom 
 
 Deploy fully configured Debian 13 VMs on ESXi 8 in ~8 minutes with zero manual interaction.
 
+## Required Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ESXI_HOST` | **Yes** | ESXi host IP address |
+| `ESXI_PASS` | **Yes** | ESXi root password |
+| `ESXI_USER` | No | ESXi user (default: `root`) |
+| `ESXI_DATASTORE` | No | Target datastore (default: `datastore1`) |
+| `NETWORK` | No | Port group name (default: `VM Network`) |
+| `DOMAIN` | No | Domain for VMs (default: `local`) |
+| `VM_PASS` | **Yes** (resize only) | VM root password for disk resize script |
+
+> **⚠️ Note:** The deploy script generates a random VM password and prints it to stdout. The password is also embedded in the preseed ISO uploaded to the ESXi datastore. Remove the ISO after deployment and treat stdout output as sensitive.
+
 ## Requirements
 
 - **ESXi 8.x** host with SSH and datastore access
